@@ -50,7 +50,7 @@ actor {
 
   module TeamMember {
     public func compare(member1 : TeamMember, member2 : TeamMember) : Order.Order {
-      Text.compare(member1.name, member2.name); // Compare by name
+      Text.compare(member1.name, member2.name);
     };
   };
 
@@ -113,28 +113,15 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("You do not have permission to add or update team members");
     };
-    if (not companyProfiles.containsKey(caller)) {
-      Runtime.trap("Company profile not found. Create a company profile first");
-    };
-    let newMember : TeamMember = {
-      name;
-      designation;
-    };
+    let newMember : TeamMember = { name; designation };
     let existingMembers = switch (teamMembers.get(caller)) {
       case (null) { List.empty<TeamMember>() };
       case (?members) { members };
     };
-    let membersArray = existingMembers.toArray();
-    let filteredList = membersArray.filter(
-      func(member) {
-        if (member.name == name) {
-          Runtime.trap("Team member already exists. Update only designation if needed");
-        };
-        true;
-      }
-    );
-    let updatedMembers = List.fromArray<TeamMember>(filteredList.concat([newMember]));
-    teamMembers.add(caller, updatedMembers);
+    // Remove any existing member with the same name (upsert behaviour)
+    let filtered = existingMembers.filter(func(m) { m.name != name });
+    filtered.add(newMember);
+    teamMembers.add(caller, filtered);
   };
 
   public query ({ caller }) func getTeamMembers() : async [TeamMember] {
@@ -153,14 +140,10 @@ actor {
       Runtime.trap("You do not have permission to delete team members");
     };
     let existingMembers = switch (teamMembers.get(caller)) {
-      case (null) { Runtime.trap("No team members found") };
+      case (null) { List.empty<TeamMember>() };
       case (?members) { members };
     };
-    let filteredMembers = existingMembers.filter(
-      func(member) {
-        member.name != name
-      }
-    );
+    let filteredMembers = existingMembers.filter(func(member) { member.name != name });
     teamMembers.add(caller, filteredMembers);
   };
 
